@@ -1,0 +1,242 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { BACK_URL } from "../../URL.jsx";
+import { useRef } from "react";
+import BorrowerDetailSearch from "./AdminBorrowerSearchMember.jsx";
+import AdminBorrowerSearchbook from "./AdminBorrowerSearchbook.jsx";
+const BorrowerDetail = () => {
+  const inputRef = useRef("");
+  const inputRef2 = useRef(null);
+  const token = JSON.parse(localStorage.getItem("auth")).token;
+  const [dueDate, setDueDate] = useState("");
+
+  const [members, setMembers] = useState(""); //member
+  const [membersId, setMembersId] = useState("");
+  const [membersname, setMembersName] = useState("");
+  const [books, setBooks] = useState([]);
+
+  const [book, setBook] = useState(""); //Book
+  const [isbn, setIsbn] = useState("");
+  const [bookId, setBookId] = useState("");
+  const [title, setTitle] = useState("");
+  const [browers, setBrowers] = useState([]);
+  const [sumFine, setSumFine] = useState(0);
+
+  const [modalOpen, setModalOpen] = useState(false); //modal
+
+  useEffect(() => {
+    fetchFine(membersId);
+  }, [browers.length]);
+
+  useEffect(() => {
+    fetchMembers(membersId);
+    fetchBrowers(membersId);
+  }, [membersId]);
+
+  const fetchMembers = async (id) => {
+    setMembersName("");
+    if (id === "") {
+      return;
+    }
+    try {
+      const response = await axios.get(`${BACK_URL}/members/` + id);
+      if (response.data) {
+        setMembers(response.data);
+        fetchFine(id);
+      } else {
+        setMembers("");
+      }
+    } catch (error) {
+      console.error("Error fetching member", error);
+    }
+  };
+
+  //เรียกข้อมูล ที่ยืม
+  const fetchBrowers = async (id) => {
+    if (id === "") {
+      return;
+    }
+    try {
+      const response = await axios.get(`${BACK_URL}/borrows/` + id);
+      setBrowers(response.data);
+    } catch (error) {
+      console.error("Error fetching members", error);
+    }
+  };
+
+  const fetchFine = async (id) => {
+    // alert(id);
+    if (id === "") {
+      return;
+    }
+    try {
+      const response = await axios.get(`${BACK_URL}/api/fine/unpaid/` + id);
+      if (response.data.singleFines[0]) {
+        setSumFine(response.data.singleFines[0]._sum.fineAmount);
+      }
+    } catch (error) {
+      console.error("Error fetching member", error);
+    }
+  };
+
+  // คืนหนังสือ borrows
+  async function updateBrower(id) {
+    if (window.confirm("ยืนยันคืนหนังสือ ?")) {
+      try {
+        await axios.put(
+          `${BACK_URL}/borrows/` + id,
+          { membersId, bookId, dueDate },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        alert("ส่งคืนหนังสือ success");
+        fetchBrowers(membersId);
+      } catch (error) {
+        console.error("Error fetching member", error);
+      }
+    }
+  }
+
+  const formatThaiDate = (isoDate) => {
+    const date = new Date(isoDate);
+    const day = date.getDate(); // ดึงข้อมูลวัน เดือน และปี และจัดรูปแบบให้เป็นวัน/เดือน/ปี พ.ศ.
+    const month = date.getMonth() + 1; // เดือนใน JavaScript เริ่มจาก 0
+    const year = date.getFullYear() + 543; // เพิ่มปี 543 เพื่อให้เป็น พ.ศ.
+    return `${day}/${month}/${year}`;
+  };
+  const handleLoan = async (e) => {
+    e.preventDefault();
+    const returnDays = members.Group?.returnDays;
+    const borrowLimit = members.Group?.borrowLimit;
+    var borrowerCount = browers.length;
+
+    if (borrowerCount >= borrowLimit) {
+      alert("ยืมหนังสือเกินจำนวนที่กำหนด ไม่สามรถยืมได้");
+      return;
+    }
+
+    if (membersId === "") {
+      alert("ชื่อสามาชิกเป็นค่าว่าง");
+      inputRef.current.focus();
+      return;
+    }
+    if (bookId === "") {
+      alert("ชื่อหนังสือเป็นค่าว่าง");
+      inputRef2.current.focus();
+      return;
+    }
+    await axios.post(
+      `${BACK_URL}/borrows`,
+      { membersId, bookId, returnDays, borrowLimit },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    fetchBrowers(membersId);
+    setBook("");
+    setBookId("");
+    setIsbn("");
+    setTitle("");
+    inputRef2.current.focus();
+  };
+
+  const calDateDif = (inputDate) => {
+    const today = new Date();
+    const targetDate = new Date(inputDate);
+    const differenceInTime = today - targetDate; // ความต่างในหน่วยมิลลิวินาที
+    const differenceInDays = Math.floor(differenceInTime / (1000 * 60 * 60 * 24));
+    return differenceInDays;
+  };
+
+  return (
+    <div className="  justify-center mx-auto  px-2     bg-white rounded-lg  ">
+      <div className="flex flex-row mx-auto">
+        {/* ค้นหา member */}
+        <BorrowerDetailSearch
+          membersId={membersId}
+          setMembersId={setMembersId}
+          members={members}
+          browers={browers}
+          sumFine={sumFine}
+          setSumFine={setSumFine}
+          setModalOpen={setModalOpen}
+          inputRef={inputRef}
+          modalOpen={modalOpen}
+          setMembers={setMembers}
+          isbn={isbn}
+          bookId={bookId}
+          setBookId={setBookId}
+        />
+
+        {/* book */}
+        <AdminBorrowerSearchbook
+          setBook={setBook}
+          book={book}
+          setBooks={setBooks}
+          books={books}
+          setBookId={setBookId}
+          bookId={bookId}
+          handleLoan={handleLoan}
+        />
+      </div>
+      <div className="flex flex-row mx-auto justify-center">
+        <button
+          onClick={handleLoan}
+          className="w-[350px] py-2 mt-2 -mb-2 px-2 bg-blue-400  rounded-md text-white"
+          type="submit"
+        >
+          บันทึก
+        </button>
+      </div>
+      <div className="px-1 h-screen  my-4  border-collapse border border-black py-5 rounded-md">
+        <table className="border-collapse border min-w-full border-slate-800 rounded-lg ">
+          <thead>
+            <tr className="border-collapse border border-slate-300 bg-blue-200 rounded-lg  h-10">
+              <th className="w-16">ลำดับที่</th>
+              <th className="w-64">ชือหนังสือ</th>
+              <th className="w-32">ISBN</th>
+              <th className="w-32">วันที่</th>
+              <th className="w-64">ชื่อผู้ยืม</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          {browers.length
+            ? browers.map((browers, index) => (
+                <>
+                  <tr className="border-collapse border border-slate-300 ">
+                    <td className="w-16 px-5" key={index}>
+                      {index + 1}.
+                    </td>
+                    {calDateDif(browers.borrowDate) > 0 ? (
+                      <td className="text-gray-400">{browers.book.title}</td>
+                    ) : (
+                      <td>{formatThaiDate(browers.borrowDate)} </td>
+                    )}
+                    <td className="w-32">{browers.book.isbn}</td>
+
+                    <td>{formatThaiDate(browers.borrowDate)} </td>
+
+                    <td className="w-32 px-20">
+                      {formatThaiDate(browers.dueDate)}
+                    </td>
+                    <td className="w-64 px-4">
+                      {browers && browers.member.name}{" "}
+                    </td>
+                    <td className="w-48">
+                      <button
+                        className="text-md px-3 py-1 bg-red-400 rounded-md text-white"
+                        onClick={() => updateBrower(browers.id)}
+                      >
+                        ส่งหนังสือคืน
+                      </button>
+                    </td>
+                  </tr>
+                </>
+              ))
+            : null}
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default BorrowerDetail;
